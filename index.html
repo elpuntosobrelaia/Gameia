@@ -24,6 +24,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            position: relative;
         }
         .black { background-color: #5D4037; }
         .white { background-color: #D7CCC8; }
@@ -31,6 +32,8 @@
             width: 40px;
             height: 40px;
             border-radius: 50%;
+            cursor: pointer;
+            position: absolute;
         }
         .white-piece { background-color: white; border: 2px solid black; }
         .black-piece { background-color: black; }
@@ -49,6 +52,8 @@
     
     <script>
         let difficulty = "easy";
+        let selectedPiece = null;
+        let selectedCell = null;
         document.getElementById("difficulty").addEventListener("change", function() {
             difficulty = this.value;
         });
@@ -60,19 +65,49 @@
                 for (let col = 0; col < 8; col++) {
                     const cell = document.createElement("div");
                     cell.className = "cell " + ((row + col) % 2 === 0 ? "white" : "black");
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    cell.addEventListener("click", () => movePiece(cell));
+
                     if (row < 3 && (row + col) % 2 === 1) {
                         const piece = document.createElement("div");
                         piece.className = "piece black-piece";
+                        piece.dataset.color = "black";
+                        piece.dataset.row = row;
+                        piece.dataset.col = col;
+                        piece.addEventListener("click", (event) => selectPiece(event, piece));
                         cell.appendChild(piece);
                     } else if (row > 4 && (row + col) % 2 === 1) {
                         const piece = document.createElement("div");
                         piece.className = "piece white-piece";
+                        piece.dataset.color = "white";
+                        piece.dataset.row = row;
+                        piece.dataset.col = col;
+                        piece.addEventListener("click", (event) => selectPiece(event, piece));
                         cell.appendChild(piece);
                     }
                     board.appendChild(cell);
                 }
             }
-            setTimeout(computerMove, difficulty === "easy" ? 2000 : difficulty === "medium" ? 1000 : 500);
+        }
+
+        function selectPiece(event, piece) {
+            event.stopPropagation();
+            if (selectedPiece) {
+                selectedPiece.style.border = "none";
+            }
+            selectedPiece = piece;
+            selectedPiece.style.border = "2px solid red";
+            selectedCell = piece.parentElement;
+        }
+
+        function movePiece(cell) {
+            if (selectedPiece && cell.classList.contains("black") && !cell.hasChildNodes()) {
+                cell.appendChild(selectedPiece);
+                selectedPiece.style.border = "none";
+                selectedPiece = null;
+                selectedCell = null;
+            }
         }
 
         function computerMove() {
