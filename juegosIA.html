@@ -4,8 +4,554 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IA y Juegos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .checkerboard {
+            width: 400px;
+            height: 400px;
+            margin: 20px auto;
+            border: 2px solid #333;
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+        }
+        
+        .cell {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .black {
+            background-color: #5D4037;
+        }
+        
+        .white {
+            background-color: #D7CCC8;
+        }
+        
+        .piece {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .white-piece {
+            background-color: #FFFFFF;
+            border: 2px solid #333;
+        }
+        
+        .black-piece {
+            background-color: #212121;
+            border: 2px solid #666;
+        }
+        
+        .king:after {
+            content: "K";
+            position: relative;
+            font-weight: bold;
+            font-size: 24px;
+            color: gold;
+        }
+        
+        .selected {
+            background-color: #4CAF50;
+        }
+        
+        .valid-move {
+            background-color: rgba(76, 175, 80, 0.5);
+        }
+        
+        #game-info {
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        
+        #reset-button {
+            background-color: #f44336;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        
+        #reset-button:hover {
+            background-color: #d32f2f;
+        }
+    </style>
 </head>
 <body>
+    <h1>Juego de Damas</h1>
+    
     <p>¿Qué sucede cuando la IA crea juegos? Descúbrelo por ti mismo. Explora una colección de mundos y desafíos generados por algoritmos, donde la sorpresa y la innovación son la norma. ¡Atrévete a experimentar!</p>
+    
+    <div id="game-info">Tu turno. Juegan las blancas.</div>
+    <div class="checkerboard" id="board"></div>
+    <button id="reset-button">Reiniciar juego</button>
+    
+    <script>
+        // Configuración del tablero
+        const BOARD_SIZE = 8;
+        const PLAYER = 'white';
+        const AI = 'black';
+        let selectedPiece = null;
+        let validMoves = [];
+        let currentTurn = PLAYER;
+        let gameBoard = [];
+        let mustJump = false;
+        let jumpAvailable = false;
+        
+        // Inicializar el tablero
+        function initializeBoard() {
+            gameBoard = [];
+            for (let row = 0; row < BOARD_SIZE; row++) {
+                gameBoard[row] = [];
+                for (let col = 0; col < BOARD_SIZE; col++) {
+                    gameBoard[row][col] = null;
+                    
+                    // Colocar piezas iniciales
+                    if ((row + col) % 2 === 1) {
+                        if (row < 3) {
+                            gameBoard[row][col] = { color: AI, isKing: false };
+                        } else if (row > 4) {
+                            gameBoard[row][col] = { color: PLAYER, isKing: false };
+                        }
+                    }
+                }
+            }
+            
+            renderBoard();
+            currentTurn = PLAYER;
+            updateGameInfo();
+        }
+        
+        // Renderizar el tablero
+        function renderBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            
+            for (let row = 0; row < BOARD_SIZE; row++) {
+                for (let col = 0; col < BOARD_SIZE; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.className += (row + col) % 2 === 0 ? ' white' : ' black';
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    
+                    // Agregar evento de clic a la celda
+                    cell.addEventListener('click', () => handleCellClick(row, col));
+                    
+                    // Agregar pieza si existe
+                    if (gameBoard[row][col]) {
+                        const piece = document.createElement('div');
+                        piece.className = 'piece';
+                        piece.className += gameBoard[row][col].color === PLAYER ? ' white-piece' : ' black-piece';
+                        
+                        if (gameBoard[row][col].isKing) {
+                            piece.className += ' king';
+                        }
+                        
+                        cell.appendChild(piece);
+                    }
+                    
+                    // Agregar clase si es un movimiento válido
+                    if (validMoves.some(move => move.row === row && move.col === col)) {
+                        cell.className += ' valid-move';
+                    }
+                    
+                    // Agregar clase si es la pieza seleccionada
+                    if (selectedPiece && selectedPiece.row === row && selectedPiece.col === col) {
+                        cell.className += ' selected';
+                    }
+                    
+                    board.appendChild(cell);
+                }
+            }
+        }
+        
+        // Manejar clic en celda
+        function handleCellClick(row, col) {
+            // Ignorar clics si no es turno del jugador
+            if (currentTurn !== PLAYER) return;
+            
+            // Si hay una pieza seleccionada y el clic es en un movimiento válido
+            if (selectedPiece && validMoves.some(move => move.row === row && move.col === col)) {
+                makeMove(selectedPiece.row, selectedPiece.col, row, col);
+                return;
+            }
+            
+            // Si no hay pieza seleccionada y el clic es en una pieza del jugador
+            if (gameBoard[row][col] && gameBoard[row][col].color === PLAYER) {
+                selectPiece(row, col);
+                return;
+            }
+            
+            // En otro caso, deseleccionar
+            selectedPiece = null;
+            validMoves = [];
+            renderBoard();
+        }
+        
+        // Seleccionar una pieza
+        function selectPiece(row, col) {
+            // Verificar si hay saltos obligatorios
+            checkForJumps();
+            
+            const piece = gameBoard[row][col];
+            if (piece && piece.color === PLAYER) {
+                selectedPiece = { row, col };
+                validMoves = getValidMoves(row, col);
+                
+                // Si hay saltos disponibles, solo permitir saltos
+                if (jumpAvailable) {
+                    validMoves = validMoves.filter(move => Math.abs(move.row - row) > 1);
+                    
+                    // Si esta pieza no tiene saltos, no permitir su selección
+                    if (validMoves.length === 0) {
+                        selectedPiece = null;
+                    }
+                }
+                
+                renderBoard();
+            }
+        }
+        
+        // Verificar si hay saltos obligatorios
+        function checkForJumps() {
+            jumpAvailable = false;
+            
+            for (let row = 0; row < BOARD_SIZE; row++) {
+                for (let col = 0; col < BOARD_SIZE; col++) {
+                    if (gameBoard[row][col] && gameBoard[row][col].color === PLAYER) {
+                        const moves = getValidMoves(row, col);
+                        for (const move of moves) {
+                            if (Math.abs(move.row - row) > 1) { // Es un salto
+                                jumpAvailable = true;
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Obtener movimientos válidos para una pieza
+        function getValidMoves(row, col) {
+            const piece = gameBoard[row][col];
+            if (!piece) return [];
+            
+            const moves = [];
+            const directions = piece.isKing ? [1, -1] : [piece.color === PLAYER ? -1 : 1];
+            
+            // Revisar movimientos normales
+            for (const rowDir of directions) {
+                for (const colDir of [-1, 1]) {
+                    const newRow = row + rowDir;
+                    const newCol = col + colDir;
+                    
+                    if (isValidPosition(newRow, newCol) && !gameBoard[newRow][newCol]) {
+                        moves.push({ row: newRow, col: newCol });
+                    }
+                }
+            }
+            
+            // Revisar saltos
+            for (const rowDir of directions) {
+                for (const colDir of [-1, 1]) {
+                    const midRow = row + rowDir;
+                    const midCol = col + colDir;
+                    const newRow = row + 2 * rowDir;
+                    const newCol = col + 2 * colDir;
+                    
+                    if (isValidPosition(midRow, midCol) && isValidPosition(newRow, newCol) && 
+                        gameBoard[midRow][midCol] && gameBoard[midRow][midCol].color !== piece.color && 
+                        !gameBoard[newRow][newCol]) {
+                        moves.push({ row: newRow, col: newCol, isJump: true, jumpedRow: midRow, jumpedCol: midCol });
+                    }
+                }
+            }
+            
+            return moves;
+        }
+        
+        // Comprobar si una posición es válida
+        function isValidPosition(row, col) {
+            return row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE;
+        }
+        
+        // Realizar un movimiento
+        function makeMove(fromRow, fromCol, toRow, toCol) {
+            const piece = gameBoard[fromRow][fromCol];
+            const move = validMoves.find(m => m.row === toRow && m.col === toCol);
+            
+            // Mover la pieza
+            gameBoard[toRow][toCol] = piece;
+            gameBoard[fromRow][fromCol] = null;
+            
+            // Capturar pieza si es un salto
+            let madeJump = false;
+            if (move && move.isJump) {
+                gameBoard[move.jumpedRow][move.jumpedCol] = null;
+                madeJump = true;
+            }
+            
+            // Convertir en rey si llega al extremo opuesto
+            if ((piece.color === PLAYER && toRow === 0) || 
+                (piece.color === AI && toRow === BOARD_SIZE - 1)) {
+                piece.isKing = true;
+            }
+            
+            // Limpiar selección
+            selectedPiece = null;
+            validMoves = [];
+            
+            // Verificar si puede continuar saltando
+            let canContinueJumping = false;
+            if (madeJump) {
+                const nextJumps = getValidMoves(toRow, toCol).filter(move => move.isJump);
+                if (nextJumps.length > 0) {
+                    canContinueJumping = true;
+                    selectedPiece = { row: toRow, col: toCol };
+                    validMoves = nextJumps;
+                }
+            }
+            
+            renderBoard();
+            
+            // Cambiar turno si no puede continuar saltando
+            if (!canContinueJumping) {
+                currentTurn = AI;
+                updateGameInfo();
+                setTimeout(makeAIMove, 1000);
+            }
+        }
+        
+        // Actualizar información del juego
+        function updateGameInfo() {
+            const gameInfo = document.getElementById('game-info');
+            if (currentTurn === PLAYER) {
+                gameInfo.textContent = 'Tu turno. Juegan las blancas.';
+            } else {
+                gameInfo.textContent = 'Turno de la IA. Juegan las negras.';
+            }
+            
+            // Verificar si hay un ganador
+            const gameState = checkGameState();
+            if (gameState !== 'playing') {
+                gameInfo.textContent = gameState === 'player' ? 
+                    '¡Has ganado! La IA no tiene movimientos.' : 
+                    'La IA ha ganado. No tienes movimientos.';
+            }
+        }
+        
+        // Verificar el estado del juego
+        function checkGameState() {
+            let playerPieces = 0;
+            let aiPieces = 0;
+            let playerMoves = 0;
+            let aiMoves = 0;
+            
+            for (let row = 0; row < BOARD_SIZE; row++) {
+                for (let col = 0; col < BOARD_SIZE; col++) {
+                    if (gameBoard[row][col]) {
+                        if (gameBoard[row][col].color === PLAYER) {
+                            playerPieces++;
+                            playerMoves += getValidMoves(row, col).length;
+                        } else {
+                            aiPieces++;
+                            aiMoves += getValidMoves(row, col).length;
+                        }
+                    }
+                }
+            }
+            
+            if (playerPieces === 0 || playerMoves === 0) {
+                return 'ai';
+            }
+            
+            if (aiPieces === 0 || aiMoves === 0) {
+                return 'player';
+            }
+            
+            return 'playing';
+        }
+        
+        // Funciones para la IA
+        function makeAIMove() {
+            // Evaluar el mejor movimiento para la IA
+            const bestMove = findBestMove();
+            
+            if (bestMove) {
+                // Mover la pieza
+                const piece = gameBoard[bestMove.fromRow][bestMove.fromCol];
+                gameBoard[bestMove.toRow][bestMove.toCol] = piece;
+                gameBoard[bestMove.fromRow][bestMove.fromCol] = null;
+                
+                // Capturar pieza si es un salto
+                if (bestMove.isJump) {
+                    gameBoard[bestMove.jumpedRow][bestMove.jumpedCol] = null;
+                }
+                
+                // Convertir en rey si llega al extremo
+                if (bestMove.toRow === BOARD_SIZE - 1) {
+                    piece.isKing = true;
+                }
+                
+                renderBoard();
+                
+                // Verificar si puede continuar saltando
+                const nextJumps = getValidMoves(bestMove.toRow, bestMove.toCol).filter(move => move.isJump);
+                if (bestMove.isJump && nextJumps.length > 0) {
+                    setTimeout(() => {
+                        makeAIMove();
+                    }, 500);
+                } else {
+                    currentTurn = PLAYER;
+                    updateGameInfo();
+                }
+            } else {
+                currentTurn = PLAYER;
+                updateGameInfo();
+            }
+        }
+        
+        // Encontrar el mejor movimiento para la IA (estrategia simple)
+        function findBestMove() {
+            let bestValue = -Infinity;
+            let bestMove = null;
+            
+            // Primero, verificar si hay saltos disponibles
+            const jumps = [];
+            
+            for (let row = 0; row < BOARD_SIZE; row++) {
+                for (let col = 0; col < BOARD_SIZE; col++) {
+                    if (gameBoard[row][col] && gameBoard[row][col].color === AI) {
+                        const moves = getValidMoves(row, col);
+                        for (const move of moves) {
+                            if (move.isJump) {
+                                jumps.push({
+                                    fromRow: row,
+                                    fromCol: col,
+                                    toRow: move.row,
+                                    toCol: move.col,
+                                    isJump: true,
+                                    jumpedRow: move.jumpedRow,
+                                    jumpedCol: move.jumpedCol
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Si hay saltos disponibles, elegir uno (preferentemente hacia el rey)
+            if (jumps.length > 0) {
+                for (const jump of jumps) {
+                    const piece = gameBoard[jump.fromRow][jump.fromCol];
+                    let value = 10; // Valor base por capturar
+                    
+                    // Bonus para avanzar hacia la coronación
+                    if (!piece.isKing) {
+                        value += (BOARD_SIZE - 1 - jump.toRow);
+                    }
+                    
+                    // Bonus por proteger piezas propias
+                    if (isProtectedPosition(jump.toRow, jump.toCol, AI)) {
+                        value += 2;
+                    }
+                    
+                    if (value > bestValue) {
+                        bestValue = value;
+                        bestMove = jump;
+                    }
+                }
+                
+                return bestMove;
+            }
+            
+            // Si no hay saltos, buscar el mejor movimiento normal
+            for (let row = 0; row < BOARD_SIZE; row++) {
+                for (let col = 0; col < BOARD_SIZE; col++) {
+                    if (gameBoard[row][col] && gameBoard[row][col].color === AI) {
+                        const moves = getValidMoves(row, col);
+                        for (const move of moves) {
+                            if (!move.isJump) { // Solo movimientos normales
+                                const piece = gameBoard[row][col];
+                                let value = 0;
+                                
+                                // Priorizar avanzar hacia la coronación
+                                if (!piece.isKing) {
+                                    value += (BOARD_SIZE - 1 - move.row);
+                                }
+                                
+                                // Bonus por proteger piezas propias
+                                if (isProtectedPosition(move.row, move.col, AI)) {
+                                    value += 2;
+                                }
+                                
+                                // Bonus por moverse hacia los bordes
+                                if (move.col === 0 || move.col === BOARD_SIZE - 1) {
+                                    value += 1;
+                                }
+                                
+                                if (value > bestValue) {
+                                    bestValue = value;
+                                    bestMove = {
+                                        fromRow: row,
+                                        fromCol: col,
+                                        toRow: move.row,
+                                        toCol: move.col,
+                                        isJump: false
+                                    };
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return bestMove;
+        }
+        
+        // Verificar si una posición está protegida
+        function isProtectedPosition(row, col, color) {
+            const directions = [
+                { row: -1, col: -1 },
+                { row: -1, col: 1 },
+                { row: 1, col: -1 },
+                { row: 1, col: 1 }
+            ];
+            
+            for (const dir of directions) {
+                const adjacentRow = row + dir.row;
+                const adjacentCol = col + dir.col;
+                
+                if (isValidPosition(adjacentRow, adjacentCol) && 
+                    gameBoard[adjacentRow][adjacentCol] && 
+                    gameBoard[adjacentRow][adjacentCol].color === color) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+        
+        // Inicializar el juego
+        document.getElementById('reset-button').addEventListener('click', initializeBoard);
+        initializeBoard();
+    </script>
 </body>
 </html>
