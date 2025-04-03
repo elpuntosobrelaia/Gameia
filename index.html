@@ -75,7 +75,6 @@
                         piece.dataset.color = "black";
                         piece.dataset.row = row;
                         piece.dataset.col = col;
-                        piece.addEventListener("click", (event) => selectPiece(event, piece));
                         cell.appendChild(piece);
                     } else if (row > 4 && (row + col) % 2 === 1) {
                         const piece = document.createElement("div");
@@ -96,9 +95,11 @@
             if (selectedPiece) {
                 selectedPiece.style.border = "none";
             }
-            selectedPiece = piece;
-            selectedPiece.style.border = "2px solid red";
-            selectedCell = piece.parentElement;
+            if (piece.dataset.color === "white") { 
+                selectedPiece = piece;
+                selectedPiece.style.border = "2px solid red";
+                selectedCell = piece.parentElement;
+            }
         }
 
         function movePiece(cell) {
@@ -107,11 +108,40 @@
                 selectedPiece.style.border = "none";
                 selectedPiece = null;
                 selectedCell = null;
+                setTimeout(computerMove, 500);
             }
         }
 
         function computerMove() {
-            console.log("Movimiento de la IA en dificultad: " + difficulty);
+            let pieces = document.querySelectorAll(".black-piece");
+            let validMoves = [];
+            pieces.forEach(piece => {
+                let row = parseInt(piece.dataset.row);
+                let col = parseInt(piece.dataset.col);
+                let newRow = row + 1;
+                let newColLeft = col - 1;
+                let newColRight = col + 1;
+
+                if (newRow < 8) {
+                    if (newColLeft >= 0) {
+                        let targetCell = document.querySelector(`.cell[data-row='${newRow}'][data-col='${newColLeft}']`);
+                        if (targetCell && !targetCell.hasChildNodes()) {
+                            validMoves.push({ piece, targetCell });
+                        }
+                    }
+                    if (newColRight < 8) {
+                        let targetCell = document.querySelector(`.cell[data-row='${newRow}'][data-col='${newColRight}']`);
+                        if (targetCell && !targetCell.hasChildNodes()) {
+                            validMoves.push({ piece, targetCell });
+                        }
+                    }
+                }
+            });
+
+            if (validMoves.length > 0) {
+                let move = validMoves[Math.floor(Math.random() * validMoves.length)];
+                move.targetCell.appendChild(move.piece);
+            }
         }
     </script>
 </body>
